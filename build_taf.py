@@ -19,17 +19,35 @@ with open("parsed_reports_dev.json", "r") as f:
 # Extract TAF reports
 # ----------------------------
 taf_records = []
-for file in data:
-    filename = file["filename"]
-    for taf in file.get("tafs", []):
-        taf_records.append({
-            "filename": filename,
-            "station": taf["station"],
-            "issued": taf["issued"],
-            "raw": taf["raw"]
-        })
+taf_records_busted_issuedtime = []
 
+for file in data:
+    filename = file.get("filename")
+    for taf in file.get("tafs", []):
+
+        record = {
+            "filename": filename,
+            "station": taf.get("station"),
+            "issued": taf.get("issued"),
+            "db_time_stamp": taf.get("db_time_stamp"),
+            "type": taf.get("type"),
+            "contents": taf.get("contents"),
+            "remark": taf.get("remark"),
+            "raw": taf.get("raw")
+        }
+
+        if taf.get("issued") is None:
+            taf_records_busted_issuedtime.append(record)
+        else:
+            taf_records.append(record)
+
+#Build Data Frames
 df_tafs = pd.DataFrame(taf_records)
+df_tafs_busted_issuedtime = pd.DataFrame(taf_records_busted_issuedtime)
+
+#write bad ones for examination
+df_tafs_busted_issuedtime.to_csv("tafs_busted_issued_time.csv", index=False)
+
 print(f"Loaded {len(df_tafs)} TAFs from {len(data)} files")
 print(df_tafs.head())
 
@@ -152,9 +170,13 @@ def split_taf_segments(raw):
     Split a TAF string into segments whenever a TAF, FM, BECMG, TEMPO, or PROB occurs.
     Returns a list of dictionaries with segment type and raw text.
     """
-    raw_marked = re.sub(r'(TAF|FM|BECMG|TEMPO|PROB)', r'*\1', raw)
+
+    #strip taf of db_time_stamp and rmk:
+    pattern = r'(?<=\d{12}\s).*?(?=(?:\sRMK.*Z=|$))'
+    tafmeat = re.search(pattern, raw).group(0)
+
+    raw_marked = re.sub(r'(TAF|FM|BECMG|TEMPO|PROB)', r'*\1', tafmeat)
     parts = [s.strip() for s in raw_marked.split('*') if s.strip()]
-    parts = parts[1:] #drop the first one
 
     segments = []
     for seg in parts:
@@ -162,13 +184,6 @@ def split_taf_segments(raw):
         seg_type = m.group(1) if m else "UNKNOWN"
         segments.append({"raw": seg, "type": seg_type})
     return segments
-
-def extract_rmk(raw):
-    remark = None
-    match = re.search(r'RMK\s.*$', raw)
-    if match:
-        remark = match.group(0)
-    return remark
 
 # ----------------------------
 # Construct Segments
@@ -201,15 +216,30 @@ taf
         segment3
 '''
 
-##FIX ME: clouds with a CB suffix are not getting processed properly in the ceiling...
-
-
 nested_tafs = []
 
 for taf in taf_records:
-    raw_taf = taf["raw"]
-    station = taf["station"]
-    issued = taf["issued"]
+    filename = taf.get("filename")
+    raw_taf = taf.get("raw")
+    station = taf.get("station")
+    issued = taf.get("issued")
+    db_time_stamp = taf.get("db_time_stamp")
+    remarks = taf.get("remark")
+    type = taf.get("type")
+
+    taf_status = "NORMAL"
+    
+    #look for cancelled or nil tafs:
+    if bool(re.search(r'NIL', raw_taf)):
+        taf_status = "NIL"
+
+    elif (
+        bool(re.search(r'FCST CNCLD', raw_taf))
+        or bool(re.search(r'FCST NOT AVBL', raw_taf))
+        or bool(re.search(r'CNL RMK NO OBS', raw_taf))
+        or bool(re.search(r' CNL ', raw_taf))
+    ):
+        taf_status = "CANCELLED"
 
     valid_from, valid_to = None, None
     valid_period_match = re.search(r'\d{4}/\d{4}', raw_taf)
@@ -220,13 +250,12 @@ for taf in taf_records:
         valid_from = parse_ddhh(valid_from_ddhh, issued_str = issued)
         valid_to = parse_ddhh(valid_to_ddhh, issued_str = issued)
 
-    remarks = extract_rmk(raw_taf)
-
     nested_segments = []
 
     segments = split_taf_segments(raw_taf)
     for seg in segments:
-        seg_raw = seg['raw']
+        seg_raw = seg.get('raw')
+        seg_type = seg.get('type')
         start_dt, end_dt = None, None
 
         #get times
@@ -254,7 +283,7 @@ for taf in taf_records:
 
         nested_segments.append({
             "raw": seg_raw,
-            "type": seg['type'],
+            "type": seg_type,
             "start": start_dt,
             "end": end_dt,
             "dir": w_dir,
@@ -268,13 +297,17 @@ for taf in taf_records:
         })
 
     nested_tafs.append({
-        "raw": raw_taf,
+        "filename": filename,
         "station": station,
         "issued": issued,
+        "db_time_stamp": db_time_stamp,
+        "type": type,
         "valid_from": valid_from,
         "valid_to": valid_to,
+        "raw": raw_taf,
         "remarks": remarks,
-        "segments": nested_segments
+        "segments": nested_segments,
+        "status": taf_status
     })
 
 
@@ -293,13 +326,16 @@ rows = []
 for taf in nested_tafs:
     for seg in taf["segments"]:
         rows.append({
-            "station": taf["station"],
-            "issued": taf["issued"],
-            "fulltaf": taf["raw"],
+            "filename": taf.get("filename"),
+            "station": taf.get("station"),
+            "issued": taf.get("issued"),
+            "db_time_stamp": taf.get("db_time_stamp"),
+            "type": taf.get("type"),
+            "status": taf.get("status"),
+            "fulltaf": taf.get("raw"),
             "valid_from": taf.get("valid_from"),
             "valid_to": taf.get("valid_to"),
             "remarks": taf.get("remarks"),
-            "type": seg.get("type"),
             "segment_raw": seg.get("raw"),
             "start_dt": seg.get("start"),
             "end_dt": seg.get("end"),

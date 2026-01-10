@@ -8,11 +8,14 @@ venv/
 *.csv
 *.json
 
-#Data files
+#Data folder
 data/
 
 #Excel
 *.xlsx
+
+#Draw.io
+*.drawio
 
 #R
 .Rproj.user/
@@ -23,3 +26,6 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# diagrams
+.drawio

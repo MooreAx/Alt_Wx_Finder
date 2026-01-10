@@ -1,13 +1,26 @@
 import json
 from pathlib import Path
+from datetime import datetime, timedelta, date
+
 
 # Paths
 input_path = Path("parsed_reports.json")
 output_path = Path("parsed_reports_dev.json")
 
 # Filters
-keep_stations = {"CYYQ", "CYTH", "CYGX", "CYYL", "CYNE", "CYQD"}
-keep_years = {"2025"}
+keep_stations = {"CYYQ", "CYTH", "CYQD", "CYYL"}
+
+
+MIN_DATE = date(2024, 11, 1)
+MAX_DATE = date(2025, 11, 30)
+
+
+def parse_issued_date(issued):
+    try:
+        return datetime.strptime(issued, "%Y%m%d%H%M").date()
+    except Exception:
+        return None
+
 
 print(f"Loading {input_path}...")
 with input_path.open(encoding="utf-8") as f:
@@ -19,12 +32,19 @@ for entry in data:
     meta_station = entry.get("meta", {}).get("station")
 
     # If the meta station isn't in our keep list, skip
-    if meta_station not in keep_stations:
-        continue
+    #if meta_station not in keep_stations:
+    #    continue
 
     # Filter METARs and TAFs by year
-    metars = [r for r in entry.get("metars", []) if r["issued"][:4] in keep_years]
-    tafs = [r for r in entry.get("tafs", []) if r["issued"][:4] in keep_years]
+    metars = [
+        r for r in entry.get("metars", [])
+        if ((d:= parse_issued_date(r.get("issued"))) is not None and MIN_DATE <= d <= MAX_DATE)
+    ]
+
+    tafs = [
+        r for r in entry.get("tafs", [])
+        if ((d:= parse_issued_date(r.get("issued"))) is not None and MIN_DATE <= d <= MAX_DATE)
+    ]
 
     # Skip files with no remaining reports
     if not metars and not tafs:

@@ -6,23 +6,39 @@ import re
 from fractions import Fraction
 
 # Load your parsed JSON file
-with open("parsed_reports.json", "r") as f:
+with open("parsed_reports_dev.json", "r") as f:
     data = json.load(f)
 
 # Extract all METAR reports from all files
 metar_records = []
+metar_records_busted_issuetime = []
+
 for file_entry in data:
-    filename = file_entry["filename"]
+    filename = file_entry.get("filename")
     for metar in file_entry.get("metars", []):
-        metar_records.append({
+
+        record = {
             "filename": filename,
-            "station": metar["station"],
-            "issued": metar["issued"],
-            "raw": metar["raw"]
-        })
+            "station": metar.get("station"),
+            "issued": metar.get("issued"),
+            "db_time_stamp": metar.get("db_time_stamp"),
+            "type": metar.get("type"),
+            "contents": metar.get("contents"),
+            "remark": metar.get("remark"),
+            "raw": metar.get("raw")
+        }
+
+        if metar.get("issued") is None:
+            metar_records_busted_issuetime.append(record)
+        else:
+            metar_records.append(record)
 
 # Build DataFrame
 df_metars = pd.DataFrame(metar_records)
+df_metars_busted_issuedtime = pd.DataFrame(metar_records_busted_issuetime)
+
+#print bad ones for examination:
+df_metars_busted_issuedtime.to_csv("metars_busted_issuedtime.csv", index=False)
 
 print(df_metars.shape)
 print(df_metars.head())
@@ -118,7 +134,7 @@ def extract_ceiling(ceilings):
     if matches:
         # Convert to feet by multiplying by 100
         return pd.Series({"ceiling": min(matches)*100})
-    return pd.Series({"ceilings": None})
+    return pd.Series({"ceiling": None})
 
 
 # Temperature/Dewpoint
@@ -191,3 +207,4 @@ print('done')
 
 # Save to CSV
 df_metars_parsed.to_csv("metars_parsed.csv", index=False)
+

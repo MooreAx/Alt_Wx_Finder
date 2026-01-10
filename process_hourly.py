@@ -5,16 +5,37 @@ import json
 import re
 import numpy as np
 
+print("running")
+
 # Load nested TAFs (produced from earlier step)
-with open("nested_tafs.json", "r") as f:
+with open("nested_tafs_clean.json", "r") as f:
     tafs = json.load(f)
 
 
 def expand_taf_to_hourly(taf):
-    start_time = pd.to_datetime(taf["valid_from"])
-    end_time = pd.to_datetime(taf["valid_to"])
+    taf_status = taf.get("status")
+    start_time = pd.to_datetime(taf.get("valid_from"))
+    end_time = pd.to_datetime(taf.get("valid_to"))
 
-    if start_time is None or end_time is None:
+    if taf_status in {"CANCELLED", "NIL"}:
+
+        #debug step:
+        print(taf.get("issued"))
+        print(pd.to_datetime(taf.get("issued")),)
+
+        return pd.DataFrame([{
+            "raw_taf": taf.get("raw"),
+            "station": taf.get("station"),
+            "issued": taf.get("issued"),
+            "status": taf_status,
+            "time": pd.to_datetime(taf.get("issued")),
+            "wind": "",
+            "vis": "",
+            "sigwx": "",
+            "clouds": "",
+            "ceiling": ""
+            }])
+    elif start_time is None or end_time is None:
         return None
 
     hours = pd.date_range(start=start_time, end=end_time, freq="1h", inclusive="left")
@@ -22,6 +43,7 @@ def expand_taf_to_hourly(taf):
         "raw_taf": taf["raw"],  # <--- add raw TAF column here
         "station": taf["station"],
         "issued": taf["issued"],
+        "status": taf_status,
         "time": hours,
         "wind": "",
         "vis": "",
@@ -78,7 +100,19 @@ def expand_taf_to_hourly(taf):
         if ceiling:
             ceiling = str(ceiling)
 
-        mask = (df["time"] >= seg_start) & (df["time"] < seg_end)
+
+        #throwing and error. trap:
+        try:
+            mask = (df["time"] >= seg_start) & (df["time"] < seg_end)
+        except Exception as e:
+            print("\nERROR CREATING MASK")
+            print("Station:", taf.get("station"))
+            print("Raw TAF:", taf.get("raw"))
+            print("Segment dict:", seg)
+            print("seg_start:", seg_start, type(seg_start))
+            print("seg_end:", seg_end, type(seg_end))
+            raise
+
 
         if seg_type in ["TAF", "FM"]:
             df.loc[mask, ["wind", "vis", "sigwx", "clouds", "ceiling"]] = [wind, vis, sigwx, clouds, ceiling]
@@ -121,6 +155,7 @@ df_tafs_hourly = pd.concat(all_taf_hours, ignore_index=True)
 
 #extract alternate minima data:
 
+#initialize columns
 df_tafs_hourly["altmin_ceiling"] = np.nan
 df_tafs_hourly["altmin_vis"] = np.nan
 df_tafs_hourly["prob_ceiling"] = np.nan

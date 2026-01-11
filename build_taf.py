@@ -41,8 +41,34 @@ for file in data:
         else:
             taf_records.append(record)
 
-#Build Data Frames
+#TAF DEDUPLICATION
+
+def dedupe_tafs(df):
+    before = len(df)
+
+    df = (
+        df
+        .sort_values("issued")
+        .drop_duplicates(
+            subset=["station", "issued"],
+            keep="last"
+        )
+        .reset_index(drop=True)
+    )
+
+    after = len(df)
+
+    if after < before:
+        print(f"Deduped TAFs: {before} --> {after}")
+
+    return df
+
+#deduplicate
 df_tafs = pd.DataFrame(taf_records)
+df_tafs = dedupe_tafs(df_tafs)
+taf_records = df_tafs.to_dict(orient="records")
+
+
 df_tafs_busted_issuedtime = pd.DataFrame(taf_records_busted_issuedtime)
 
 #write bad ones for examination

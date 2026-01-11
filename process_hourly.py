@@ -14,35 +14,43 @@ with open("nested_tafs_clean.json", "r") as f:
 
 def expand_taf_to_hourly(taf):
     taf_status = taf.get("status")
+
     start_time = pd.to_datetime(taf.get("valid_from"))
     end_time = pd.to_datetime(taf.get("valid_to"))
 
     if taf_status in {"CANCELLED", "NIL"}:
 
         #debug step:
-        print(taf.get("issued"))
-        print(pd.to_datetime(taf.get("issued")),)
+        #print(taf.get("issued"))
+        #print(pd.to_datetime(taf.get("issued")),)
 
-        return pd.DataFrame([{
+        if pd.isna(start_time):
+            start_time = pd.to_datetime(taf.get("issued")).ceil("h")
+        if pd.isna(end_time):
+            end_time = start_time + pd.Timedelta(hours=24)
+
+        hours = pd.date_range(start=start_time, end=end_time, freq="1h", inclusive="left")
+
+        return pd.DataFrame({
             "raw_taf": taf.get("raw"),
             "station": taf.get("station"),
             "issued": taf.get("issued"),
             "status": taf_status,
-            "time": pd.to_datetime(taf.get("issued")),
+            "time": hours,
             "wind": "",
             "vis": "",
             "sigwx": "",
             "clouds": "",
             "ceiling": ""
-            }])
+            })
     elif start_time is None or end_time is None:
         return None
 
     hours = pd.date_range(start=start_time, end=end_time, freq="1h", inclusive="left")
     df = pd.DataFrame({
-        "raw_taf": taf["raw"],  # <--- add raw TAF column here
-        "station": taf["station"],
-        "issued": taf["issued"],
+        "raw_taf": taf.get("raw"),  # <--- add raw TAF column here
+        "station": taf.get("station"),
+        "issued": taf.get("issued"),
         "status": taf_status,
         "time": hours,
         "wind": "",

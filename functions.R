@@ -4,8 +4,8 @@ calc_max_tailwind <- function(wind_str, rwy_bearing_mag, variation) {
     return(NA)
   }
   
-  #get a list of winds -- e.g. 12010G20
-  wind_list <- str_extract_all(wind_str, "\\d{3}\\d{2}(G\\d{2})?", simplify = TRUE)
+  #get a list of winds -- e.g. "12010G20KT -> 15015KT" -> [["12010G20", "15015"]]
+  wind_list <- str_extract_all(wind_str, "\\d{3}\\d{2}(?:G\\d{2})?", simplify = FALSE)[[1]]
   
   if (length(wind_list) == 0) return(NA)
   
@@ -30,8 +30,17 @@ calc_max_tailwind <- function(wind_str, rwy_bearing_mag, variation) {
   tailwinds <- tailwinds[!is.na(tailwinds)]
   
   if (length(tailwinds) == 0) {
-    cat("warning - empty tailwinds for wind string: ", wind_str, "\n")
-    return(NA)
+    stop(
+      paste(
+        cat(
+          "WARNING: empty tailwinds\n",
+          " wind_str:", wind_str, "\n",
+          " rwy_bearing_mag:", rwy_bearing_mag, "\n",
+          " variation:", variation, "\n",
+          " extracted wind_list:", paste(wind_list, collapse = ", "), "\n"
+        )
+      )
+    )
   }
   
   return(max(tailwinds, na.rm = TRUE))

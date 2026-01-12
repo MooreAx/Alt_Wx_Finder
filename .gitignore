@@ -14,6 +14,9 @@ data/
 #Excel
 *.xlsx
 
+# PPT
+*.pptx
+
 #Draw.io
 *.drawio
 
@@ -28,4 +31,4 @@ data/
 Thumbs.db
 
 # diagrams
-.drawio
+*.drawio

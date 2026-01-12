@@ -40,10 +40,11 @@ landing_minima <- read_csv(
     precision_apch = parse_number(precision_apch),
     lowest_haa = parse_number(lowest_haa),
     advisory_vis = parse_number(advisory_vis),
-    ops_spec_vis = parse_number(ops_spec_vis),
+    apch_ban_vis = parse_number(apch_ban_vis),
     variation = parse_number(variation),
     rwy_bearing = parse_number(rwy_bearing)
-  )
+  ) %>%
+  replace_na(list(variation = 0))
 
 #calculate usable runways to get lowest minima
 metars_minima <- metars %>%
@@ -62,11 +63,19 @@ metars_minima <- metars %>%
     max_tailwind < 10
   ) %>%
   group_by(station, issued_time) %>%
+  mutate(
+    usable_runways = str_c(sort(unique(rwy)), collapse = ", ")
+  ) %>%
+  slice_min(
+    #now choose 1 runway to actually use
+    order_by = lowest_haa,
+    n = 1,
+    with_ties = FALSE
+  ) %>%
   summarise(
-    lowest_haa = min(lowest_haa),
-    #FIX ME: technically these 2 many not come from the same apch... need to refactor later
-    lowest_ops_spec_vis = min(ops_spec_vis),
-    usable_runways = str_c(rwy, collapse = ", "),
+    lowest_haa = lowest_haa,
+    lowest_apch_ban_vis = apch_ban_vis,
+    usable_runways = usable_runways,
     .groups = "drop"
   ) 
 
@@ -78,7 +87,7 @@ metars_with_requirements <- metars %>%
   ) %>%
   mutate(
     suitable_for_landing = !is.na(ceiling) & !is.na(vis) &
-      ceiling >= lowest_haa & vis >= lowest_ops_spec_vis
+      ceiling >= lowest_haa & vis >= lowest_apch_ban_vis
   )
 
 metars_with_requirements %>% write_csv("metars_processed.csv")

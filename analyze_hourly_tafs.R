@@ -14,17 +14,14 @@ tafs <- read_csv("tafs_hourly.csv", col_types = cols(.default = "c")) %>%
   mutate(
     time = ymd_hms(time),
     valid_taf = case_when(
-      #might not actually want to exclude these!
-      str_detect(raw_taf, "FCST CNCLD") ~ FALSE,
-      str_detect(raw_taf, "FCST NOT AVBL") ~ FALSE,
-      str_detect(raw_taf, "CNL RMK NO OBS") ~ FALSE,
-      .default = TRUE
+      status == "NORMAL" ~ TRUE,
+      .default = FALSE
     ),
     altmin_ceiling = parse_number(altmin_ceiling),
     altmin_vis = parse_number(altmin_vis),
     prob_ceiling = parse_number(prob_ceiling),
   ) %>%
-  filter(valid_taf == TRUE) %>%
+  #filter(valid_taf == TRUE) %>%
   replace_na(list(altmin_ceiling = Inf))
 
 
@@ -39,7 +36,8 @@ alt_min_reqts <- read_csv(
     advisory_vis = parse_number(advisory_vis),
     variation = parse_number(variation),
     rwy_bearing = parse_number(rwy_bearing)
-  )
+  ) %>%
+  replace_na(list(variation = 0))
 
 #calculate usable runways to get applicable minimas
 tafs_alt_reqts <- tafs %>%
@@ -60,17 +58,25 @@ tafs_alt_reqts <- tafs %>%
 yyq_data <- tafs_alt_reqts %>% filter(station == "CYYQ") %>% head(10)
 
 tafs_alt_reqts2 <- tafs_alt_reqts %>%
-  replace_na(list(max_tailwind = 0)) %>%
   filter(
-    max_tailwind < 10
+    max_tailwind < 10 #nil tafs dropped here
   ) %>%
   group_by(station, issued_time, time) %>%
+  mutate(
+    usable_runways = str_c(sort(unique(rwy)), collapse = ", "),
+    n_precision_apch = sum(precision_apch)
+  ) %>%
+  slice_min(
+    #now choose 1 runway
+    order_by = lowest_haa,
+    n = 1,
+    with_ties = FALSE
+  ) %>%
   summarise(
-    n_precision_apch = sum(precision_apch),
-    lowest_haa = min(lowest_haa),
-    #FIX ME: technically these 2 many not come from the same apch... need to refactor later
-    lowest_advisory_vis = min(advisory_vis),
-    usable_runways = str_c(rwy, collapse = ", "),
+    n_precision_apch = n_precision_apch,
+    lowest_haa = lowest_haa,
+    lowest_advisory_vis = advisory_vis,
+    usable_runways = usable_runways,
     .groups = "drop"
   ) %>%
   mutate(
@@ -149,6 +155,7 @@ taf_with_requirements <- tafs %>%
     suitable_alternate = meets_ceiling_and_vis & coalesce(meets_prob_ceiling, TRUE),
     
     reason = case_when(
+      status != "NORMAL" ~ "TAF UNUSABLE",
       !suitable_alternate & !meets_ceiling_and_vis & !meets_prob_ceiling ~
         "vis/ceiling < required *AND* PROB ceiling < landing minima",
       !meets_ceiling_and_vis ~ "vis/ceiling < required",

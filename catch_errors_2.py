@@ -67,10 +67,10 @@ for taf in tafs:
     cleaned.append(taf)
 
 with open(OUTPUT, "w") as f:
-    json.dump(cleaned, f, indent=2, default=str)
+    json.dump(cleaned, f, default=str)
 
 with open(PROBLEMS, "w") as f:
-    json.dump(dropped, f, indent=2, default=str)
+    json.dump(dropped, f, default=str)
 
 print(f"Dropped {len(dropped)} TAFs")
 print(f"Kept    {len(cleaned)} TAFs")

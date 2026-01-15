@@ -342,7 +342,7 @@ print("complete")
 import json
 
 with open("nested_tafs.json", "w") as f:
-    json.dump(nested_tafs, f, default=str, indent=2)
+    json.dump(nested_tafs, f, default=str)
 
 
 

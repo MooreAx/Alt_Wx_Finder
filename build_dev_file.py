@@ -3,16 +3,28 @@ from pathlib import Path
 from datetime import datetime, timedelta, date
 
 
+#RUN = "ANALYSIS1"
+RUN = "ANALYSIS2"
+
 # Paths
 input_path = Path("parsed_reports.json")
 output_path = Path("parsed_reports_dev.json")
 
 # Filters
-keep_stations = {"CYYQ", "CYTH", "CYQD", "CYYL"}
+
+if RUN == "ANALYSIS1":
+    keep_stations = {"CYYQ", "CYTH", "CYQD", "CYYL"}
 
 
-MIN_DATE = date(2024, 11, 1)
-MAX_DATE = date(2025, 11, 30)
+    MIN_DATE = date(2024, 11, 1)
+    MAX_DATE = date(2025, 11, 30)
+
+elif RUN == "ANALYSIS2":
+    keep_stations = {"CYYQ", "CYTH", "CYQD", "CYYL"}
+
+
+    MIN_DATE = date(2022, 10, 1)
+    MAX_DATE = date(2025, 10, 1)
 
 
 def parse_issued_date(issued):

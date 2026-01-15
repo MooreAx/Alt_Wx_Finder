@@ -29,7 +29,24 @@ metars <- read_csv("metars_parsed.csv", col_types = cols(.default = "c")) %>%
     ),
     .after = wind_gust
   )
+  
+#there are 79 rows of (station, issued_time) duplicates in the metars.
+#i suspect this is the cause of a failed join later on. delete
 
+duplicates <- metars %>%
+  group_by(station, issued_time) %>%
+  summarise(n = n()) %>%
+  filter(n>1) %>%
+  ungroup()
+
+metars_no_dups <- metars %>%
+  left_join(
+    duplicates,
+    join_by(station, issued_time),
+    relationship = "many-to-many"
+  ) %>%
+  filter(is.na(n)) %>%
+  select(-n)
 
 #read landing req'ts
 landing_minima <- read_csv(
@@ -47,7 +64,7 @@ landing_minima <- read_csv(
   replace_na(list(variation = 0))
 
 #calculate usable runways to get lowest minima
-metars_minima <- metars %>%
+metars_minima <- metars_no_dups %>%
   select(station, issued_time, wind_reconstructed) %>%
   left_join(
     landing_minima,
@@ -79,7 +96,7 @@ metars_minima <- metars %>%
     .groups = "drop"
   ) 
 
-metars_with_requirements <- metars %>%
+metars_with_requirements <- metars_no_dups %>%
   left_join(
     metars_minima,
     join_by(station, issued_time),
